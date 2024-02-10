@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1
+FROM alpine:3.18
+LABEL maintainer="Gzxhwq <gzxhwq@gmail.com>"
+RUN set -ex \
+    && apk --no-cache add iptables tzdata ca-certificates \
+    && rm -rf /var/cache/apk/*
+COPY --from=gzxhwq/sing-box:client /usr/local/bin/sing-box /usr/local/bin/sing-box
+COPY sb-redir /usr/local/bin/sb-redir
+ENTRYPOINT ["/usr/local/bin/sb-redir"]

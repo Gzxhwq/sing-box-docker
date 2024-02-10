@@ -1,0 +1,22 @@
+#!/bin/ash
+
+set -e
+
+/sbin/iptables -t nat -F
+/sbin/iptables -t nat -X
+/sbin/iptables -t nat -N SING-BOX
+/sbin/iptables -t nat -A SING-BOX -d 0.0.0.0/8 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 10.0.0.0/8 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 127.0.0.0/8 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 169.254.0.0/16 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 172.16.0.0/12 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 192.168.0.0/16 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 224.0.0.0/4 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -d 240.0.0.0/4 -j RETURN
+/sbin/iptables -t nat -A SING-BOX -p tcp -j RETURN -m mark --mark 0x2b
+/sbin/iptables -t nat -A SING-BOX -p tcp -j REDIRECT --to-ports 12345
+/sbin/iptables -t nat -A PREROUTING -p tcp -j SING-BOX
+/sbin/iptables -t nat -A OUTPUT -p tcp -j SING-BOX
+
+
+/usr/local/bin/sing-box run -D /etc/sing-box

@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS golang-builder
+WORKDIR /go/src/github.com/sagernet/sing-box
+ARG TARGETOS TARGETARCH
+ARG GOPROXY=""
+ENV GOPROXY ${GOPROXY}
+ENV CGO_ENABLED=0
+# Static build required so that we can safely copy the binary over.
+RUN --mount=target=. \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    set -ex \
+    &&  apk --no-cache add git \
+    &&  export VERSION=$(GOOS=$TARGETOS GOARCH=$TARGETARCH go run ./cmd/internal/read_tag) \
+    &&  GOOS=$TARGETOS GOARCH=$TARGETARCH go build -v -trimpath \
+        -tags with_acme,with_ech,with_gvisor,with_quic,with_reality_server,with_wireguard \
+        -o /go/bin/sing-box \
+        -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid=" \
+        ./cmd/sing-box
+
+FROM alpine:latest as alpine-with-tz
+RUN apk --no-cache add tzdata zip
+WORKDIR /usr/share/zoneinfo
+# -0 means no compression.  Needed because go's
+# tz loader doesn't handle compressed data.
+RUN zip -q -r -0 /zoneinfo.zip .
+        
+FROM scratch
+# the golang program:
+COPY --from=golang-builder /go/bin/sing-box /usr/local/bin/sing-box
+# the timezone data:
+ENV ZONEINFO /zoneinfo.zip
+COPY --from=alpine-with-tz /zoneinfo.zip /
+# the tls certificates:
+# NB: this pulls directly from the upstream image, which already has ca-certificates:
+COPY --from=alpine-with-tz /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=alpine-with-tz /etc/passwd /etc/
+# create tmp directory:
+ADD tmp.tar /
+VOLUME /etc/sing-box
+ENV TZ=Asia/Shanghai
+ENTRYPOINT ["/usr/local/bin/sing-box"]
+CMD ["run", "-D", "/etc/sing-box"]

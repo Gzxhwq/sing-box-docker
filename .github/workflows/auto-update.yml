@@ -1,0 +1,208 @@
+name: "Auto Update Docker"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */1 * * *"
+env:
+  REPO_URL: https://github.com/SagerNet/sing-box
+  # REPO_BRANCH: master
+  TZ: Asia/Shanghai
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: docker.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+
+
+jobs:
+  job_init:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Initialization environment
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 1
+          keep_minimum_runs: 0
+
+
+  job_auto_update_docker:
+    if: ${{ always() }}
+    needs: job_init
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    name: Auto-Update-${{ matrix.pakcages }} 
+    strategy:
+      fail-fast: false
+      matrix:
+        pakcages: [ Release, Pre-release, Client, Server ]
+        include:
+          - pakcages: Release
+            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            dockerfile: Dockerfile.main
+            tag: latest
+            suffix: 
+          - pakcages: Pre-release
+            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease)) | first | .tag_name' | sed -e 's/^v//'
+            dockerfile: Dockerfile.dev
+            tag: dev
+            suffix: 
+          - pakcages: Client
+            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            dockerfile: Dockerfile.client
+            tag: client
+            suffix: -client
+          - pakcages: Server
+            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            dockerfile: Dockerfile.server
+            tag: server
+            suffix: -server
+
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Get ${{ matrix.pakcages }} Version
+        id: getVersion
+        run: |
+          echo VERSION=$(${{ matrix.release_api_command }}) >> $GITHUB_OUTPUT
+
+
+      - name: Compare Version 
+        id: cacheVersion
+        uses: actions/cache@v4
+        if: steps.getVersion.outputs.VERSION != '' && !cancelled()
+        with:
+          path: .VERSION
+          key: ${{ matrix.pakcages }}-Version:v${{ steps.getVersion.outputs.VERSION }}
+
+
+      - name: Initialization environment
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+
+
+      - name: Clone source code
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        run: |
+          df -hT $PWD
+          git clone $REPO_URL
+          [ -e tmp.tar ] && mv tmp.tar $GITHUB_WORKSPACE/sing-box/
+          [ -e sb-redir ] && mv sb-redir $GITHUB_WORKSPACE/sing-box/
+          cd $GITHUB_WORKSPACE/sing-box
+          git fetch --tags
+
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+
+
+      - name: Load Dockerfile
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        run: |
+          cd $GITHUB_WORKSPACE/sing-box
+          git checkout tags/v${{ steps.getVersion.outputs.VERSION }}
+          cd $GITHUB_WORKSPACE
+          [ -e ${{ matrix.dockerfile }} ] && mv ${{ matrix.dockerfile }} $GITHUB_WORKSPACE/sing-box/Dockerfile
+          mv Dockerfile.* $GITHUB_WORKSPACE/sing-box/
+
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Login to ${{ env.REGISTRY }} registry
+        uses: docker/login-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push ${{ matrix.pakcages }} image
+        id: build
+        uses: docker/build-push-action@v5
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          context: ./sing-box
+          platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ steps.getVersion.outputs.VERSION }}${{ matrix.suffix }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ matrix.tag }}
+            ghcr.io/${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ steps.getVersion.outputs.VERSION }}${{ matrix.suffix }}
+            ghcr.io/${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ matrix.tag }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push redir image
+        id: build-redir
+        uses: docker/build-push-action@v5
+        if: steps.build.outputs.digest != ' ' && matrix.pakcages == 'Client' && !cancelled()
+        with:
+          context: ./sing-box
+          file: ./sing-box/Dockerfile.redir
+          platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ steps.getVersion.outputs.VERSION }}-redir
+            ${{ secrets.DOCKERHUB_USERNAME }}/sing-box:redir
+            ghcr.io/${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ steps.getVersion.outputs.VERSION }}-redir
+            ghcr.io/${{ secrets.DOCKERHUB_USERNAME }}/sing-box:redir
+
+
+      - name: Save New Version
+        if: steps.build.outputs.digest != ' ' && !cancelled()
+        run: |
+          echo v${{ steps.getVersion.outputs.VERSION }} | tee .VERSION
+  
