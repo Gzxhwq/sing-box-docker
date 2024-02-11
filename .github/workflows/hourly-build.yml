@@ -1,0 +1,161 @@
+name: "Hourly Build Docker"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */1 * * *"
+env:
+  REPO_URL: https://github.com/SagerNet/sing-box
+  REPO_BRANCH: dev-next
+  TZ: Asia/Shanghai
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: docker.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+
+
+jobs:
+  job_init:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Initialization environment
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 1
+          keep_minimum_runs: 0
+
+
+  job_auto_update_docker:
+    if: ${{ always() }}
+    needs: job_init
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    name: Auto-Update-${{ matrix.pakcages }} 
+    strategy:
+      fail-fast: false
+      matrix:
+        pakcages: [ Hourly ]
+        include:
+          - pakcages: Hourly
+            release_api_command: git rev-parse --short HEAD
+            dockerfile: Dockerfile.dev
+            tag: git
+
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Get ${{ matrix.pakcages }} Version
+        id: getVersion
+        run: |
+          git clone --depth 1 $REPO_URL -b $REPO_BRANCH
+          [ -e tmp.tar ] && mv tmp.tar $GITHUB_WORKSPACE/sing-box/tmp.tar
+          cd sing-box
+          echo VERSION=$(${{ matrix.release_api_command }}) >> $GITHUB_OUTPUT
+
+
+      - name: Compare Version 
+        id: cacheVersion
+        uses: actions/cache@v4
+        if: steps.getVersion.outputs.VERSION != '' && !cancelled()
+        with:
+          path: .VERSION
+          key: ${{ matrix.pakcages }}-HEAD:${{ steps.getVersion.outputs.VERSION }}
+
+
+      - name: Initialization environment
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+
+
+      - name: Load Dockerfile
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        run: |
+          cd $GITHUB_WORKSPACE
+          [ -e ${{ matrix.dockerfile }} ] && mv ${{ matrix.dockerfile }} $GITHUB_WORKSPACE/sing-box/Dockerfile
+
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Login to ${{ env.REGISTRY }} registry
+        uses: docker/login-action@v3
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+      - name: Login to GitHub Container Registry
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+  
+  
+        # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        with:
+          context: ./sing-box
+          platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ matrix.tag }}
+            ghcr.io/${{ secrets.DOCKERHUB_USERNAME }}/sing-box:${{ matrix.tag }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      - name: Save New Version
+        if: steps.build.outputs.digest != ' ' && !cancelled()
+        run: |
+          echo ${{ steps.getVersion.outputs.VERSION }} | tee .VERSION
+  
