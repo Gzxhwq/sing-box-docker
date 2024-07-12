@@ -3,7 +3,7 @@ FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS golang-builder
 WORKDIR /go/src/github.com/sagernet/sing-box
 ARG TARGETOS TARGETARCH
 ARG GOPROXY=""
-ENV GOPROXY ${GOPROXY}
+ENV GOPROXY=${GOPROXY}
 ENV CGO_ENABLED=0
 # Static build required so that we can safely copy the binary over.
 RUN --mount=target=. \
@@ -18,7 +18,7 @@ RUN --mount=target=. \
         -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid=" \
         ./cmd/sing-box
 
-FROM alpine:latest as alpine-with-tz
+FROM alpine:latest AS alpine-with-tz
 RUN apk --no-cache add tzdata zip
 WORKDIR /usr/share/zoneinfo
 # -0 means no compression.  Needed because go's
@@ -29,7 +29,7 @@ FROM scratch
 # the golang program:
 COPY --from=golang-builder /go/bin/sing-box /usr/local/bin/sing-box
 # the timezone data:
-ENV ZONEINFO /zoneinfo.zip
+ENV ZONEINFO=/zoneinfo.zip
 COPY --from=alpine-with-tz /zoneinfo.zip /
 # the tls certificates:
 # NB: this pulls directly from the upstream image, which already has ca-certificates:
