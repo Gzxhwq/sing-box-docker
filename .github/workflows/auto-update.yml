@@ -188,7 +188,7 @@ jobs:
       - name: Build and push redir image
         id: build-redir
         uses: docker/build-push-action@v6
-        if: steps.build.outputs.digest != ' ' && matrix.pakcages == 'Client' && !cancelled()
+        if: steps.build.outputs.digest != ' ' && matrix.pakcages == 'Pre-release' && !cancelled()
         with:
           context: ./sing-box
           file: ./sing-box/Dockerfile.redir
