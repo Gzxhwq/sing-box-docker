@@ -13,7 +13,7 @@ RUN --mount=target=. \
     &&  apk --no-cache add git \
     &&  export VERSION=$(GOOS=$TARGETOS GOARCH=$TARGETARCH go run ./cmd/internal/read_tag) \
     &&  GOOS=$TARGETOS GOARCH=$TARGETARCH go build -v -trimpath \
-        -tags with_acme,with_clash_api,with_dhcp,with_ech,with_gvisor,with_quic,with_reality_server,with_utls,with_wireguard \
+        -tags with_acme,with_clash_api,with_dhcp,with_ech,with_gvisor,with_quic,with_reality_server,with_tailscale,with_utls,with_wireguard \
         -o /go/bin/sing-box \
         -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid=" \
         ./cmd/sing-box
