@@ -55,22 +55,22 @@ jobs:
         pakcages: [ Release, Pre-release, Client, Server ]
         include:
           - pakcages: Release
-            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            release_api_command: curl -fsL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
             dockerfile: Dockerfile.main
             tag: latest
             suffix: 
           - pakcages: Pre-release
-            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease)) | first | .tag_name' | sed -e 's/^v//'
+            release_api_command: curl -fsL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease)) | first | .tag_name' | sed -e 's/^v//'
             dockerfile: Dockerfile.dev
             tag: dev
             suffix: 
           - pakcages: Client
-            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            release_api_command: curl -fsL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
             dockerfile: Dockerfile.client
             tag: client
             suffix: -client
           - pakcages: Server
-            release_api_command: curl -sL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
+            release_api_command: curl -fsL https://api.github.com/repos/SagerNet/sing-box/releases | jq -r 'map(select(.prerelease|not)) | first | .tag_name' | sed -e 's/^v//'
             dockerfile: Dockerfile.server
             tag: server
             suffix: -server
@@ -84,7 +84,18 @@ jobs:
       - name: Get ${{ matrix.pakcages }} Version
         id: getVersion
         run: |
-          echo VERSION=$(${{ matrix.release_api_command }}) >> $GITHUB_OUTPUT
+          if ! VERSION=$(${{ matrix.release_api_command }}); then
+            echo "::error::Curl failed with status $?"
+            exit 1
+          fi
+
+          if [ -n "$VERSION" ]; then
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "Valid version: $VERSION"
+          else
+            echo "::error::Received empty version"
+            exit 1
+          fi
 
 
       - name: Compare Version 
