@@ -15,7 +15,7 @@ RUN --mount=target=. \
     &&  GOOS=$TARGETOS GOARCH=$TARGETARCH go build -v -trimpath \
         -tags with_acme,with_clash_api,with_dhcp,with_gvisor,with_quic,with_tailscale,with_utls,with_wireguard \
         -o /go/bin/sing-box \
-        -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid=" \
+        -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid= -checklinkname=0" \
         ./cmd/sing-box
 
 FROM alpine:latest AS alpine-with-tz
