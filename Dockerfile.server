@@ -10,7 +10,7 @@ RUN --mount=target=. \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     set -ex \
-    &&  apk --no-cache add git \
+    &&  apk add git build-base \
     &&  export VERSION=$(GOOS=$TARGETOS GOARCH=$TARGETARCH go run ./cmd/internal/read_tag) \
     &&  GOOS=$TARGETOS GOARCH=$TARGETARCH go build -v -trimpath \
         -tags with_acme,with_gvisor,with_quic,with_tailscale,with_utls,with_wireguard \
@@ -19,7 +19,7 @@ RUN --mount=target=. \
         ./cmd/sing-box
 
 FROM alpine:latest AS alpine-with-tz
-RUN apk --no-cache add tzdata zip
+RUN apk add tzdata zip
 WORKDIR /usr/share/zoneinfo
 # -0 means no compression.  Needed because go's
 # tz loader doesn't handle compressed data.
