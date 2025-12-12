@@ -76,7 +76,7 @@ jobs:
 
       - name: Compare Version 
         id: cacheVersion
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         if: steps.getVersion.outputs.VERSION != '' && !cancelled()
         with:
           path: .VERSION
