@@ -142,6 +142,7 @@ jobs:
           cd $GITHUB_WORKSPACE
           [ -e ${{ matrix.dockerfile }} ] && mv ${{ matrix.dockerfile }} $GITHUB_WORKSPACE/sing-box/Dockerfile
           mv Dockerfile.* $GITHUB_WORKSPACE/sing-box/
+          cp -rf release $GITHUB_WORKSPACE/sing-box/
 
 
       # Login against a Docker registry except on PR

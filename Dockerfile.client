@@ -5,21 +5,25 @@ ARG TARGETOS TARGETARCH
 ARG GOPROXY=""
 ENV GOPROXY=${GOPROXY}
 ENV CGO_ENABLED=0
+ENV GOOS=$TARGETOS
+ENV GOARCH=$TARGETARCH
 # Static build required so that we can safely copy the binary over.
 RUN --mount=target=. \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     set -ex \
     &&  apk add git build-base \
-    &&  export VERSION=$(GOOS=$TARGETOS GOARCH=$TARGETARCH go run ./cmd/internal/read_tag) \
-    &&  GOOS=$TARGETOS GOARCH=$TARGETARCH go build -v -trimpath \
-        -tags with_clash_api,with_dhcp,with_gvisor,with_quic,with_tailscale,with_utls,with_wireguard \
+    &&  export VERSION=$(go run ./cmd/internal/read_tag) \
+    &&  export TAGS=$(cat release/DEFAULT_BUILD_TAGS_CLIENT) \
+    &&  export LDFLAGS_SHARED=$(cat release/LDFLAGS) \
+    &&  go build -v -trimpath \
+        -tags "$TAGS" \
         -o /go/bin/sing-box \
-        -ldflags "-extldflags=-static -X 'github.com/sagernet/sing-box/constant.Version=$VERSION' -s -w -buildid=" \
+        -ldflags "-X \"github.com/sagernet/sing-box/constant.Version=$VERSION\" $LDFLAGS_SHARED -s -w -buildid=" \
         ./cmd/sing-box
 
 FROM alpine:latest AS alpine-with-tz
-RUN apk add tzdata zip
+RUN apk --no-cache add tzdata zip
 WORKDIR /usr/share/zoneinfo
 # -0 means no compression.  Needed because go's
 # tz loader doesn't handle compressed data.
