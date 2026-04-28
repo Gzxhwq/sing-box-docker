@@ -101,20 +101,20 @@ jobs:
       - name: Compare Version 
         id: cacheVersion
         uses: actions/cache@v5
-        if: steps.getVersion.outputs.VERSION != '' && !cancelled()
+        if: steps.getVersion.outputs.VERSION != '' && steps.getVersion.outputs.VERSION != 'null' && !cancelled()
         with:
           path: .VERSION
           key: ${{ matrix.pakcages }}-Version:v${{ steps.getVersion.outputs.VERSION }}
 
 
       - name: Initialization environment
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success' && !cancelled()
         run: |
           sudo timedatectl set-timezone "$TZ"
 
 
       - name: Clone source code
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         run: |
           df -hT $PWD
           git clone $REPO_URL
@@ -126,16 +126,16 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
 
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
 
 
       - name: Load Dockerfile
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         run: |
           cd $GITHUB_WORKSPACE/sing-box
           git checkout tags/v${{ steps.getVersion.outputs.VERSION }}
@@ -149,7 +149,7 @@ jobs:
       # https://github.com/docker/login-action
       - name: Login to ${{ env.REGISTRY }} registry
         uses: docker/login-action@v4
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -158,7 +158,7 @@ jobs:
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -170,7 +170,7 @@ jobs:
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v6
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
@@ -180,7 +180,7 @@ jobs:
       - name: Build and push ${{ matrix.pakcages }} image
         id: build
         uses: docker/build-push-action@v7
-        if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
+        if: steps.cacheVersion.outputs.cache-hit != 'true' && steps.cacheVersion.outcome == 'success'  && !cancelled()
         with:
           context: ./sing-box
           platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64
