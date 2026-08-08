@@ -109,7 +109,7 @@ jobs:
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Login to ${{ env.REGISTRY }} registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.5.2
         if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
         with:
           registry: ${{ env.REGISTRY }}
@@ -119,7 +119,7 @@ jobs:
 
       - name: Login to GitHub Container Registry
         if: steps.cacheVersion.outputs.cache-hit != 'true' && !cancelled()
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.5.2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
