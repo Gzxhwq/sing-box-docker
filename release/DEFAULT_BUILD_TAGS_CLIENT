@@ -1,1 +1,1 @@
-badlinkname,tfogo_checklinkname0,with_clash_api,with_dhcp,with_gvisor,with_quic,with_tailscale,with_utls,with_wireguard
+badlinkname,tfogo_checklinkname0,with_ccm,with_clash_api,with_cloudflared,with_dhcp,with_gvisor,with_ocm,with_openconnect,with_openvpn,with_quic,with_tailscale,with_usbip,with_utls,with_wireguard
